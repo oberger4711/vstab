@@ -5,7 +5,7 @@ import argparse
 import numpy as np
 import cv2
 
-DATA_FOLDER = 'data'
+DATA_FOLDER = os.path.join('..', 'data')
 DEFAULT_VIDEO = 'pan.avi'
 DETECTOR = cv2.xfeatures2d.SIFT_create()
 
@@ -20,7 +20,7 @@ def parse_args():
     args.file = os.path.join(DATA_FOLDER, args.file)
     return args
 
-def readVideo(file):
+def read_video(file):
     video = cv2.VideoCapture(file)
     if not video.isOpened():
         print("Error: Could not open video '{}'.".format(file))
@@ -55,11 +55,13 @@ def main():
     args = parse_args()
 
     # Input
-    frames = readVideo(args.file)
+    print("Reading video...")
+    frames = read_video(args.file)
     if frames is None:
         exit(1)
 
     # Process
+    print("Detecting features...")
     transformations = [np.identity(3) for _ in range(len(frames))]
     for i in range(len(frames) - 1):
         frame_current = frames[i]
