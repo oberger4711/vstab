@@ -3,13 +3,16 @@
 #include <vector>
 
 // OpenCV
+#include "opencv2/calib3d.hpp"
+#include "opencv2/features2d.hpp"
 #include "opencv2/xfeatures2d.hpp"
 
 #include "video.h"
 
 template<typename T>
 std::vector<cv::Mat> stabilize(Video& frames, const bool debug) {
-  std::vector<cv::Mat> tfs(frames.size());
+  const auto eye = cv::Mat::eye(3, 3, CV_64F);
+  std::vector<cv::Mat> tfs(frames.size(), eye);
   cv::Ptr<T> detector = T::create();
 
   for (size_t i = 0; i < frames.size() - 1; i++) {
@@ -48,5 +51,12 @@ std::vector<cv::Mat> stabilize(Video& frames, const bool debug) {
         cv::arrowedLine(frame_current, static_cast<cv::Point2i>(pts_current[j]), static_cast<cv::Point2i>(pts_next[j]), cv::Scalar(255, 120, 120));
       }
     }
+
+    // Estimate transformation.
+    auto& tf_next = tfs[i + 1];
+    tf_next = cv::findHomography(pts_next, pts_current, cv::RANSAC);
+    tf_next = tfs[i] * tf_next; // Accumulate transforms.
   }
 }
+
+std::vector<cv::Point2f> extract_centers(Video& frames, std::vector<cv::Mat> transforms, const bool debug);

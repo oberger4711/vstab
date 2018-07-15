@@ -40,17 +40,20 @@ boost::program_options::variables_map parse_args(int argc, char *argv[], std::st
 
 void display(const Video& frames) {
   cv::namedWindow("vstab", cv::WINDOW_NORMAL);
-  size_t i = 0;
+  int i = 0;
   char key;
   do {
     const auto& frame = frames[i];
     cv::imshow("vstab", frame);
     key = cv::waitKey();
     if (key == 0x6a) {
-      i = (i + 1) % frames.size();
+      i = (i + 1) % static_cast<int>(frames.size());
     }
     if (key == 0x6B) {
-      i = (i - 1) % frames.size();
+      i--;
+      if (i < 0) {
+        i = frames.size() - 1;
+      }
     }
   } while (key != 27);
   cv::destroyAllWindows();
