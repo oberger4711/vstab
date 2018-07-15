@@ -12,6 +12,7 @@ DETECTOR = cv2.xfeatures2d.SIFT_create()
 def parse_args():
     parser = argparse.ArgumentParser(description='Match features of video frames.')
     parser.add_argument('file', nargs='?', type=str, help='Video file inside data folder that shall be processed.')
+    parser.add_argument('--debug', action='store_true')
 
     args = parser.parse_args()
     if args.file is None:
@@ -42,11 +43,10 @@ def main():
         exit(1)
 
     # Process
-    keypoints_next, descriptors_next = DETECTOR.detectAndCompute(frames[0], None)
     for i in range(len(frames) - 1):
         frame_current = frames[i]
         frame_next = frames[i + 1]
-        keypoints_current, descriptors_current = keypoints_next, descriptors_next
+        keypoints_current, descriptors_current = DETECTOR.detectAndCompute(frame_current, None)
         keypoints_next, descriptors_next = DETECTOR.detectAndCompute(frame_next, None)
 
         matcher = cv2.BFMatcher()
@@ -60,11 +60,22 @@ def main():
 
         pts_current = np.float32([ keypoints_current[m.queryIdx].pt for m in good_matches]).reshape(-1, 1, 2)
         pts_next = np.float32([ keypoints_next[m.trainIdx].pt for m in good_matches]).reshape(-1, 1, 2)
-        def to_int_tuple(pt):
-            return tuple(*np.int32(pt).tolist())
-        for pt_current, pt_next in zip(pts_current, pts_next):
-            pt_src, pt_dest = to_int_tuple(pt_current), to_int_tuple(pt_next)
-            cv2.arrowedLine(frame_current, pt_src, pt_dest, (255, 120, 120))
+
+        # Debug viz
+        if args.debug:
+            def to_int_tuple(pt):
+                return tuple(*np.int32(pt).tolist())
+            for pt_current, pt_next in zip(pts_current, pts_next):
+                pt_src, pt_dest = to_int_tuple(pt_current), to_int_tuple(pt_next)
+                cv2.arrowedLine(frame_current, pt_src, pt_dest, (255, 120, 120))
+
+        # Estimate homography
+        homography, mask = cv2.findHomography(pts_next, pts_current, cv2.RANSAC)
+        #homography[0, 2] = 0 # Stabilize only y axis.
+
+        height, width, channels = frame_next.shape
+        frame_next = cv2.warpPerspective(frame_next, homography, (width, height))
+        frames[i + 1] = frame_next
 
     # Visualize
     cv2.namedWindow('frame', cv2.WINDOW_NORMAL)
