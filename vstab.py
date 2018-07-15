@@ -5,12 +5,12 @@ import argparse
 import numpy as np
 import cv2
 
-DATA_FOLDER = os.path.join('..', 'data')
+DATA_FOLDER = 'data'
 DEFAULT_VIDEO = 'pan.avi'
 DETECTOR = cv2.xfeatures2d.SIFT_create()
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Match features of video frames.')
+    parser = argparse.ArgumentParser(description='Stabilize a given video.')
     parser.add_argument('file', nargs='?', type=str, help='Video file inside data folder that shall be processed.')
     parser.add_argument('--debug', action='store_true')
 
