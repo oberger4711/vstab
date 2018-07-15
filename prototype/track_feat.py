@@ -43,6 +43,7 @@ def main():
         exit(1)
 
     # Process
+    transformations = [np.identity(3) for _ in range(len(frames))]
     for i in range(len(frames) - 1):
         frame_current = frames[i]
         frame_next = frames[i + 1]
@@ -72,10 +73,14 @@ def main():
         # Estimate homography
         homography, mask = cv2.findHomography(pts_next, pts_current, cv2.RANSAC)
         #homography[0, 2] = 0 # Stabilize only y axis.
+        transformations[i + 1] = np.matmul(transformations[i], homography)
 
-        height, width, channels = frame_next.shape
-        frame_next = cv2.warpPerspective(frame_next, homography, (width, height))
-        frames[i + 1] = frame_next
+    for i in range(len(frames)):
+        frame = frames[i]
+        tf = transformations[i]
+        height, width, channels = frame.shape
+        frame = cv2.warpPerspective(frame, tf, (width, height))
+        frames[i] = frame
 
     # Visualize
     cv2.namedWindow('frame', cv2.WINDOW_NORMAL)
