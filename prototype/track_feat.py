@@ -34,6 +34,23 @@ def readVideo(file):
     video.release()
     return frames
 
+def to_int_tuple(pt):
+    lst = np.int32(pt).tolist()
+    return tuple(*lst)
+
+def extract_cropped_rectangle(frame, tf):
+    height, width, channels = frame.shape
+    corners = np.array([[0, height], [width, height], [width, 0], [0, 0]], dtype=np.float32)
+    corners = np.expand_dims(corners, 0)
+    corners_smoothed = cv2.perspectiveTransform(corners, tf)
+    corners_smoothed = np.squeeze(corners_smoothed, axis=0)
+    top = np.max(corners_smoothed[[2, 3], 1], axis=0)
+    bottom = np.min(corners_smoothed[[0, 1], 1], axis=0)
+    right = np.min(corners_smoothed[[1, 2], 0], axis=0)
+    left = np.max(corners_smoothed[[3, 0], 0], axis=0)
+    corners_cropped = np.array([[left, bottom], [right, bottom], [right, top], [left, top]])
+    return corners_cropped
+
 def main():
     args = parse_args()
 
@@ -64,8 +81,6 @@ def main():
 
         # Debug viz
         if args.debug:
-            def to_int_tuple(pt):
-                return tuple(*np.int32(pt).tolist())
             for pt_current, pt_next in zip(pts_current, pts_next):
                 pt_src, pt_dest = to_int_tuple(pt_current), to_int_tuple(pt_next)
                 cv2.arrowedLine(frame_current, pt_src, pt_dest, (255, 120, 120))
@@ -75,14 +90,27 @@ def main():
         #homography[0, 2] = 0 # Stabilize only y axis.
         transformations[i + 1] = np.matmul(transformations[i], homography)
 
-    for i in range(len(frames)):
-        frame = frames[i]
-        tf = transformations[i]
+    centers = []
+    for i, frame, tf in zip(range(len(frames)), frames, transformations):
+        corners_cropped = extract_cropped_rectangle(frame, tf)
+        min = np.min(corners_cropped, axis=0)
+        max = np.max(corners_cropped, axis=0)
+        center = (min + max) / 2
+        centers.append(center)
+
+    for i, frame, tf in zip(range(len(frames)), frames, transformations):
         height, width, channels = frame.shape
         frame = cv2.warpPerspective(frame, tf, (width, height))
         frames[i] = frame
 
-    # Visualize
+    # Debug viz homography centers.
+    if args.debug:
+        for i, frame, center in zip(range(len(frames)), frames, centers):
+            center_int = center.astype(np.int32)
+            for j in range(i, len(frames)):
+                cv2.circle(frames[j], (center_int[0], center_int[1]), 2, (120, 255, 120))
+
+    # Display frame
     cv2.namedWindow('frame', cv2.WINDOW_NORMAL)
     i = 0
     while True:
