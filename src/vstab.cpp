@@ -83,7 +83,8 @@ int main(int argc, char *argv[]) {
   // The following may go in a loop allowing the change of smoothing parameters.
 
   std::cout << "Smoothing motion..." << std::endl;
-  std::vector<cv::Point2f> centers_smoothed = smooth_motion_parameterless(centers, 40.f);
+  std::vector<cv::Point2f> centers_smoothed = smooth_motion_parameterless(centers, 80.f);
+  add_motion(transforms, centers_smoothed);
 
   std::cout << "Transforming frames..." << std::endl;
   Video frames_tfed = transform_video(frames, transforms);

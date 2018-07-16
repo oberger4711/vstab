@@ -67,10 +67,12 @@ std::vector<cv::Mat> stabilize(Video& frames, const bool debug) {
   return tfs;
 }
 
+void add_motion(std::vector<cv::Mat>& in_out_transforms, const std::vector<cv::Point2f>& centers);
+
 /**
  * Applies the transformations on the frames
  * @param frames The video frames.
  * @param transforms The transformation matrices for each frame.
  * @return Transformed copy of the frames.
  */
-Video transform_video(Video& frames, std::vector<cv::Mat> transforms);
+Video transform_video(Video& frames, const std::vector<cv::Mat>& transforms);

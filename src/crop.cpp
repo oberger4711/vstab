@@ -46,7 +46,7 @@ std::vector<cv::Point2f> extract_centers(const Video& frames, const std::vector<
   std::vector<cv::Rect> cropped_rects = extract_max_cropped_rect(frames, transforms);
   for (size_t i = 0; i < cropped_rects.size(); i++) {
     const auto& rect = cropped_rects[i];
-    centers[i] = (rect.tl() + rect.br()) / 2.0;
+    centers[i] = rect.tl();
   }
   return centers;
 }
