@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vector>
+#include <algorithm>
 
 // OpenCV
 #include "opencv2/calib3d.hpp"
@@ -11,7 +12,7 @@
 
 template<typename T>
 std::vector<cv::Mat> stabilize(Video& frames, const bool debug) {
-  const auto eye = cv::Mat::eye(3, 3, CV_64F);
+  const auto eye = cv::Mat::eye(3, 3, CV_64FC1);
   std::vector<cv::Mat> tfs(frames.size(), eye);
   cv::Ptr<T> detector = T::create();
 
@@ -20,6 +21,7 @@ std::vector<cv::Mat> stabilize(Video& frames, const bool debug) {
     auto& frame_next = frames[i + 1];
 
     // Apply detector.
+    // TODO: Do not find keypoints / descriptors twice.
     std::vector<cv::KeyPoint> keypoints_current, keypoints_next;
     cv::Mat descriptors_current, descriptors_next;
     detector->detectAndCompute(frame_current, cv::Mat(), keypoints_current, descriptors_current);
@@ -55,8 +57,34 @@ std::vector<cv::Mat> stabilize(Video& frames, const bool debug) {
     // Estimate transformation.
     auto& tf_next = tfs[i + 1];
     tf_next = cv::findHomography(pts_next, pts_current, cv::RANSAC);
+    if (tf_next.empty()) {
+      std::cerr << "Warning: Empty homography for frame " << i << ". Too few associations?" << std::endl;
+    }
     tf_next = tfs[i] * tf_next; // Accumulate transforms.
   }
+  return tfs;
 }
 
-std::vector<cv::Point2f> extract_centers(Video& frames, std::vector<cv::Mat> transforms, const bool debug);
+/**
+ * Extracts an axis-aligned bounding box with maximal size inside the transformed frame, that contains no black border pixels.
+ * @param frames The video frames.
+ * @param transforms The transformation matrices for each frame.
+ * @return The maximal cropped rectangle for each frame.
+ */
+std::vector<cv::Rect> extract_max_cropped_rect(Video& frames, std::vector<cv::Mat> transforms);
+
+/**
+ * Extracts the center of the axis-aligned bounding box with maximal size inside the transformed frame, that contains no black border pixels.
+ * @param frames The video frames.
+ * @param transforms The transformation matrices for each frame.
+ * @return The center points for each frame.
+ */
+std::vector<cv::Point2f> extract_centers(Video& frames, std::vector<cv::Mat> transforms);
+
+/**
+ * Applies the transformations on the frames
+ * @param frames The video frames.
+ * @param transforms The transformation matrices for each frame.
+ * @return Transformed copy of the frames.
+ */
+Video transform_video(Video& frames, std::vector<cv::Mat> transforms);

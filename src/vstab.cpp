@@ -76,6 +76,25 @@ int main(int argc, char *argv[]) {
   std::cout << "Estimating transformations..." << std::endl;
   std::vector<cv::Mat> transforms = stabilize<cv::xfeatures2d::SIFT>(frames, debug);
 
+  std::cout << "Extracting centers..." << std::endl;
+  std::vector<cv::Point2f> centers = extract_centers(frames, transforms);
+
+  // The following may go in a loop allowing the change of smoothing parameters.
+
+  std::cout << "Transforming frames..." << std::endl;
+  Video frames_tfed = transform_video(frames, transforms);
+
+  // Draw frame centers.
+  if (debug) {
+    for (size_t i = 0; i < frames_tfed.size(); i++) {
+      cv::Point2i center_int = static_cast<cv::Point2i>(centers[i]);
+      // Draw trace.
+      for (size_t j = i; j < frames_tfed.size(); j++) {
+        cv::circle(frames_tfed[j], center_int, 2, cv::Scalar(120, 255, 120));
+      }
+    }
+  }
+
   std::cout << "Display..." << std::endl;
-  display(frames);
+  display(frames_tfed);
 }

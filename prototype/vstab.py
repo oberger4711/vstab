@@ -42,12 +42,12 @@ def extract_cropped_rectangle(frame, tf):
     height, width, channels = frame.shape
     corners = np.array([[0, height], [width, height], [width, 0], [0, 0]], dtype=np.float32)
     corners = np.expand_dims(corners, 0)
-    corners_smoothed = cv2.perspectiveTransform(corners, tf)
-    corners_smoothed = np.squeeze(corners_smoothed, axis=0)
-    top = np.max(corners_smoothed[[2, 3], 1], axis=0)
-    bottom = np.min(corners_smoothed[[0, 1], 1], axis=0)
-    right = np.min(corners_smoothed[[1, 2], 0], axis=0)
-    left = np.max(corners_smoothed[[3, 0], 0], axis=0)
+    corners_tfed = cv2.perspectiveTransform(corners, tf)
+    corners_tfed = np.squeeze(corners_tfed, axis=0)
+    top = np.max(corners_tfed[[2, 3], 1], axis=0)
+    bottom = np.min(corners_tfed[[0, 1], 1], axis=0)
+    right = np.min(corners_tfed[[1, 2], 0], axis=0)
+    left = np.max(corners_tfed[[3, 0], 0], axis=0)
     corners_cropped = np.array([[left, bottom], [right, bottom], [right, top], [left, top]])
     return corners_cropped
 
