@@ -29,8 +29,8 @@ This is the pipeline:
 The transformation can be undone which ideally results in video of no camera motion.
 3. Smoothen camera motion by regressing a translation for each frame using non-linear Least Squares.
 The following two costs are minimized in the process:
-    1. The difference of the translation to the center of the frame after eliminating the camera motion.
-    2. The difference in the steps from the translation of the previous frame and to the translation of the next frame.
+    1. Centered: The difference of the translation to the center of the frame estimated using the keypoint correspondencies.
+    2. Smoothed: The difference in the steps from the translation of the previous frame and to the translation of the next frame.
 4. Apply the transformation from 2. and 3.
 5. Crop the frames to the largest rectangle with the original aspect ratio that always contains content.
 
