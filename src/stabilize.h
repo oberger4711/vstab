@@ -18,13 +18,15 @@ std::vector<cv::Mat> stabilize(Video& frames, const bool debug) {
 
   std::vector<cv::KeyPoint> keypoints_current, keypoints_next;
   cv::Mat descriptors_current, descriptors_next;
-  detector->detectAndCompute(frames[0], cv::Mat(), keypoints_current, descriptors_current);
+  detector->detectAndCompute(frames[0], cv::Mat(), keypoints_next, descriptors_next);
   for (size_t i = 0; i < frames.size() - 1; i++) {
     auto& frame_current = frames[i];
     auto& frame_next = frames[i + 1];
 
     // Apply detector.
-    // TODO: Do not find keypoints / descriptors twice.
+    keypoints_current.clear();
+    keypoints_current.swap(keypoints_next);
+    descriptors_current = descriptors_next;
     detector->detectAndCompute(frame_next, cv::Mat(), keypoints_next, descriptors_next);
 
     // Find keypoint matches.
