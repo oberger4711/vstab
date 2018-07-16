@@ -94,15 +94,15 @@ int main(int argc, char *argv[]) {
   std::vector<cv::Point2f> centers_smoothed = smooth_motion_parameterless(centers, 80.f);
   add_motion(transforms, centers_smoothed);
 
-  std::vector<cv::Rect> rects_cropped = extract_max_cropped_rect(frames, transforms);
-  cv::Rect rect_common = std::accumulate(rects_cropped.begin(), rects_cropped.end(), rects_cropped.front(), [](const auto& a, const auto& b) {
-      return a & b;
-      });
 
   std::cout << "Transforming frames..." << std::endl;
   Video frames_tfed = transform_video(frames, transforms);
 
   std::cout << "Cropping to common rectangle..." << std::endl;
+  std::vector<cv::Rect> rects_cropped = extract_max_cropped_rect(frames, transforms);
+  cv::Rect rect_common = std::accumulate(rects_cropped.begin(), rects_cropped.end(), rects_cropped.front(), [](const auto& a, const auto& b) {
+      return a & b;
+      });
   crop_and_resize(frames_tfed, rect_common);
 
   // Draw frame centers.
