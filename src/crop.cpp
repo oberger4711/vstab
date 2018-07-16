@@ -36,6 +36,7 @@ std::vector<cv::Rect> extract_max_cropped_rect(const Video& frames, const std::v
     cv::minMaxLoc(corners_tfed_ch[0].colRange(3, 5), &min, &max);
     const double left = max;
 
+    // TODO: Respect aspect ratio.
     cropped_rects[i] = cv::Rect(left, top, (right - left), (bottom - top));
   }
   return cropped_rects;
