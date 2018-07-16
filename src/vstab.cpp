@@ -94,7 +94,6 @@ int main(int argc, char *argv[]) {
   std::vector<cv::Point2f> centers_smoothed = smooth_motion_parameterless(centers, 80.f);
   add_motion(transforms, centers_smoothed);
 
-
   std::cout << "Transforming frames..." << std::endl;
   Video frames_tfed = transform_video(frames, transforms);
 
