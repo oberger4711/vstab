@@ -30,3 +30,10 @@ The following two costs are minimized in the process:
 
 A smoothing factor amplifies the costs of 3ii.
 This is effectively a trade-of between a smooth camera motion and a low loss of pixels in the following cropping step.
+
+This is shown in the following screenshot:
+* Blue: Correspondencies between keypoints of the current and the following frame (outliers are filterd by RANSAC)
+* Green: Original camera motion trajectory estimated from keypoint correspondencies
+* Red: Smoothed camera motion minimizing the cost functions (smoothness controlled by the smoothing factor)
+
+![Screenshot of smoothing](https://github.com/oberger4711/vstab/blob/master/images/smoothing.png)
