@@ -13,17 +13,19 @@
 #include "crop.h"
 #include "fit.h"
 
-boost::program_options::variables_map parse_args(int argc, char *argv[], std::string& out_file) {
+boost::program_options::variables_map parse_args(int argc, char *argv[], std::string& out_file, float& out_smoothing) {
   namespace po = boost::program_options;
   po::options_description desc("Allowed options");
   desc.add_options()
         ("help", "Produces help message")
         ("debug", "Enables debug output")
-        ("crop", po::value<float>(), "Crops down to this percent")
         ("file", po::value<std::string>(&out_file)->required(), "The file to process")
+        ("smoothing", po::value<float>(&out_smoothing)->required(), "Smoothing factor")
+        ("crop", po::value<float>(), "Crops down to this percent")
         ;
   po::positional_options_description pos;
   pos.add("file", 1);
+  pos.add("smoothing", 1);
 
   po::variables_map vm;
   try {
@@ -64,11 +66,15 @@ void display(const Video& frames) {
 
 int main(int argc, char *argv[]) {
   std::string file;
-  auto options = parse_args(argc, argv, file);
+  float smoothing;
+  auto options = parse_args(argc, argv, file, smoothing);
   if (options.count("help")) {
     return 1;
   }
   if (!options.count("file")) {
+    return 1;
+  }
+  if (!options.count("smoothing")) {
     return 1;
   }
   const bool debug = static_cast<bool>(options.count("debug"));
@@ -91,7 +97,7 @@ int main(int argc, char *argv[]) {
   // The following may go in a loop allowing the change of smoothing parameters.
 
   std::cout << "Smoothing motion..." << std::endl;
-  std::vector<cv::Point2f> centers_smoothed = smooth_motion_parameterless(centers, 80.f);
+  std::vector<cv::Point2f> centers_smoothed = smooth_motion_parameterless(centers, smoothing);
   add_motion(transforms, centers_smoothed);
 
   std::cout << "Transforming frames..." << std::endl;
