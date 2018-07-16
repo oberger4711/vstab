@@ -2,6 +2,8 @@
 Video stabilizer that smoothes camera motion.
 
 ## Setup
+Built on Linux but may work on windows (somehow).
+
 Requirements:
 * OpenCV built with contrib modules (this requires building it from source)
 * Ceres
@@ -20,7 +22,7 @@ make
 This is the pipeline:
 1. Detect keypoints and descriptors with SIFT in each frame.
 2. Estimate homography transformation between two consecutive frames using RANSAC to find keypoint correspondencies.
-The transformation can be undone which ideally results in video of no camera motion
+The transformation can be undone which ideally results in video of no camera motion.
 3. Smoothen camera motion by regressing a translation for each frame using non-linear Least Squares.
 The following two costs are minimized in the process:
     1. The difference of the translation to the center of the frame after eliminating the camera motion.
