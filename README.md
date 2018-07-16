@@ -17,6 +17,10 @@ cd build
 cmake ..
 make
 ```
+Run to following to find out how to use it:
+```
+./vstab --help
+```
 
 ## Algorithm
 This is the pipeline:
