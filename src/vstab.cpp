@@ -6,10 +6,11 @@
 // OpenCV
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/highgui/highgui.hpp>
-#include "opencv2/xfeatures2d.hpp"
 
 #include "video.h"
 #include "stabilize.h"
+#include "crop.h"
+#include "fit.h"
 
 boost::program_options::variables_map parse_args(int argc, char *argv[], std::string& out_file) {
   namespace po = boost::program_options;
@@ -76,10 +77,13 @@ int main(int argc, char *argv[]) {
   std::cout << "Estimating transformations..." << std::endl;
   std::vector<cv::Mat> transforms = stabilize<cv::xfeatures2d::SIFT>(frames, debug);
 
-  std::cout << "Extracting centers..." << std::endl;
+  std::cout << "Extracting motion..." << std::endl;
   std::vector<cv::Point2f> centers = extract_centers(frames, transforms);
 
   // The following may go in a loop allowing the change of smoothing parameters.
+
+  std::cout << "Smoothing motion..." << std::endl;
+  std::vector<cv::Point2f> centers_smoothed = smooth_motion_parameterless(centers, 40.f);
 
   std::cout << "Transforming frames..." << std::endl;
   Video frames_tfed = transform_video(frames, transforms);
@@ -88,9 +92,11 @@ int main(int argc, char *argv[]) {
   if (debug) {
     for (size_t i = 0; i < frames_tfed.size(); i++) {
       cv::Point2i center_int = static_cast<cv::Point2i>(centers[i]);
+      cv::Point2i center_smoothed_int = static_cast<cv::Point2i>(centers_smoothed[i]);
       // Draw trace.
       for (size_t j = i; j < frames_tfed.size(); j++) {
         cv::circle(frames_tfed[j], center_int, 2, cv::Scalar(120, 255, 120));
+        cv::circle(frames_tfed[j], center_smoothed_int, 2, cv::Scalar(120, 120, 255));
       }
     }
   }

@@ -16,15 +16,15 @@ std::vector<cv::Mat> stabilize(Video& frames, const bool debug) {
   std::vector<cv::Mat> tfs(frames.size(), eye);
   cv::Ptr<T> detector = T::create();
 
+  std::vector<cv::KeyPoint> keypoints_current, keypoints_next;
+  cv::Mat descriptors_current, descriptors_next;
+  detector->detectAndCompute(frames[0], cv::Mat(), keypoints_current, descriptors_current);
   for (size_t i = 0; i < frames.size() - 1; i++) {
     auto& frame_current = frames[i];
     auto& frame_next = frames[i + 1];
 
     // Apply detector.
     // TODO: Do not find keypoints / descriptors twice.
-    std::vector<cv::KeyPoint> keypoints_current, keypoints_next;
-    cv::Mat descriptors_current, descriptors_next;
-    detector->detectAndCompute(frame_current, cv::Mat(), keypoints_current, descriptors_current);
     detector->detectAndCompute(frame_next, cv::Mat(), keypoints_next, descriptors_next);
 
     // Find keypoint matches.
@@ -64,22 +64,6 @@ std::vector<cv::Mat> stabilize(Video& frames, const bool debug) {
   }
   return tfs;
 }
-
-/**
- * Extracts an axis-aligned bounding box with maximal size inside the transformed frame, that contains no black border pixels.
- * @param frames The video frames.
- * @param transforms The transformation matrices for each frame.
- * @return The maximal cropped rectangle for each frame.
- */
-std::vector<cv::Rect> extract_max_cropped_rect(Video& frames, std::vector<cv::Mat> transforms);
-
-/**
- * Extracts the center of the axis-aligned bounding box with maximal size inside the transformed frame, that contains no black border pixels.
- * @param frames The video frames.
- * @param transforms The transformation matrices for each frame.
- * @return The center points for each frame.
- */
-std::vector<cv::Point2f> extract_centers(Video& frames, std::vector<cv::Mat> transforms);
 
 /**
  * Applies the transformations on the frames
