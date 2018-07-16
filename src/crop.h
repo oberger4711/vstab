@@ -23,3 +23,7 @@ std::vector<cv::Rect> extract_max_cropped_rect(const Video& frames, const std::v
  * @return The center points for each frame.
  */
 std::vector<cv::Point2f> extract_centers(const Video& frames, const std::vector<cv::Mat>& transforms);
+
+void crop_to_percentage(Video& frames, const float percentage);
+
+void crop_and_resize(Video& frames, const cv::Rect& rect_common);
