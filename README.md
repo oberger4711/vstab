@@ -5,9 +5,9 @@ Raw:
 
 ![Raw](https://github.com/oberger4711/vstab/blob/master/images/raw.gif)
 
-Smoothed:
+Stabilized:
 
-![Smoothed](https://github.com/oberger4711/vstab/blob/master/images/smoothed.gif)
+![Stabilized](https://github.com/oberger4711/vstab/blob/master/images/smoothed.gif)
 
 ## Setup
 Built on Linux but may work on windows (somehow).
