@@ -1,6 +1,14 @@
 # vstab
 Video stabilizer that smoothes camera motion.
 
+Raw:
+
+![Raw](https://github.com/oberger4711/vstab/blob/master/images/raw.gif)
+
+Smoothed:
+
+![Smoothed](https://github.com/oberger4711/vstab/blob/master/images/smoothed.gif)
+
 ## Setup
 Built on Linux but may work on windows (somehow).
 

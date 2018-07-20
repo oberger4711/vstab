@@ -1,5 +1,7 @@
 #include <iostream>
 #include <numeric>
+#include <sstream>
+#include <iomanip>
 
 // Boost
 #include <boost/program_options.hpp>
@@ -22,6 +24,7 @@ boost::program_options::variables_map parse_args(int argc, char *argv[], std::st
         ("file", po::value<std::string>(&out_file)->required(), "The file to process")
         ("smoothing", po::value<float>(&out_smoothing)->required(), "Smoothing factor")
         ("crop", po::value<float>(), "Crops down to this percent")
+        ("export-frames", "Exports each stabilized frame as image file")
         ;
   po::positional_options_description pos;
   pos.add("file", 1);
@@ -122,6 +125,15 @@ int main(int argc, char *argv[]) {
         cv::circle(frames_tfed[j], center_frame + center_smoothed_int, 2, cv::Scalar(120, 120, 255));
       }
     }
+  }
+
+  if (options.count("export-frames")) {
+      for (size_t i = 0; i < frames_tfed.size(); i++) {
+          const auto& frame = frames_tfed[i];
+          std::stringstream str;
+          str << "frame_" << std::setw(4) << std::setfill('0') << i << ".png";
+          cv::imwrite(str.str(), frame);
+      }
   }
 
   std::cout << "Display..." << std::endl;
