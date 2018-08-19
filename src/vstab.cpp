@@ -111,7 +111,9 @@ int main(int argc, char *argv[]) {
   cv::Rect rect_common = std::accumulate(rects_cropped.begin(), rects_cropped.end(), rects_cropped.front(), [](const auto& a, const auto& b) {
       return a & b;
       });
-  crop_and_resize(frames_tfed, rect_common);
+  if (!debug) {
+    crop_and_resize(frames_tfed, rect_common);
+  }
 
   // Draw frame centers.
   if (debug) {
