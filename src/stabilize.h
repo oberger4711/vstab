@@ -12,10 +12,11 @@
 
 template<typename T>
 std::vector<cv::Mat> stabilize(Video& frames, const bool debug) {
-  const auto eye = cv::Mat::eye(3, 3, CV_64FC1);
-  std::vector<cv::Mat> tfs(frames.size(), eye);
+  std::vector<cv::Mat> tfs(frames.size());
+  for (auto& m : tfs) {
+    m = cv::Mat::eye(3, 3, CV_64FC1);
+  }
   cv::Ptr<T> detector = T::create();
-
   std::vector<cv::KeyPoint> keypoints_current, keypoints_next;
   cv::Mat descriptors_current, descriptors_next;
   detector->detectAndCompute(frames[0], cv::Mat(), keypoints_next, descriptors_next);
@@ -26,7 +27,7 @@ std::vector<cv::Mat> stabilize(Video& frames, const bool debug) {
     // Apply detector.
     keypoints_current.clear();
     keypoints_current.swap(keypoints_next);
-    descriptors_current = descriptors_next;
+    descriptors_current = descriptors_next.clone();
     detector->detectAndCompute(frame_next, cv::Mat(), keypoints_next, descriptors_next);
 
     auto& tf_next = tfs[i + 1];
