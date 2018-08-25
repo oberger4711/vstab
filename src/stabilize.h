@@ -9,10 +9,14 @@
 #include "opencv2/xfeatures2d.hpp"
 
 #include "video.h"
+#include "track.h"
 
 template<typename T>
 std::vector<cv::Mat> stabilize(Video& frames, const bool debug) {
   std::vector<cv::Mat> tfs(frames.size());
+  std::vector<Track> tracks;
+  std::vector<Track> tracks_finished;
+  TrackMatcher matcher;
   for (auto& m : tfs) {
     m = cv::Mat::eye(3, 3, CV_64FC1);
   }
@@ -20,6 +24,12 @@ std::vector<cv::Mat> stabilize(Video& frames, const bool debug) {
   std::vector<cv::KeyPoint> keypoints_current, keypoints_next;
   cv::Mat descriptors_current, descriptors_next;
   detector->detectAndCompute(frames[0], cv::Mat(), keypoints_next, descriptors_next);
+  // Create tracks starting in first frame.
+  tracks.reserve(keypoints_next.size());
+  for (size_t i = 0; i < keypoints_next.size(); i++) {
+    tracks.emplace_back(keypoints_next[i], descriptors_next.row(i));
+  }
+  // Process following frames.
   for (size_t i = 0; i < frames.size() - 1; i++) {
     auto& frame_current = frames[i];
     auto& frame_next = frames[i + 1];
@@ -32,55 +42,32 @@ std::vector<cv::Mat> stabilize(Video& frames, const bool debug) {
 
     auto& tf_next = tfs[i + 1];
     if (!descriptors_current.empty() && !descriptors_next.empty()) {
-      // Find keypoint matches.
-      cv::FlannBasedMatcher matcher;
-      std::vector<std::vector<cv::DMatch>> matches_all;
-      matcher.knnMatch(descriptors_current, descriptors_next, matches_all, 2);
-
-      // Filter matches.
-      // Keep only good matches.
-      std::vector<cv::DMatch> matches_good;
-      for (const auto& neighbours : matches_all) {
-        if (neighbours[0].distance < 0.75 * neighbours[1].distance) {
-          matches_good.push_back(neighbours[0]);
-        }
-      }
-      if (!matches_good.empty()) {
-        // Keep only close matches. I. e. closer than the median distance.
-        std::vector<float> distances(matches_good.size());
-        for (size_t i = 0; i < matches_good.size(); i++) {
-          const auto& pt_current = keypoints_current[matches_good[i].queryIdx].pt;
-          const auto& pt_next = keypoints_next[matches_good[i].trainIdx].pt;
-          distances[i] = cv::norm(pt_next - pt_current);
-        }
-        std::sort(distances.begin(), distances.end());
-        const float median = distances[distances.size() / 2];
-        for (auto it = matches_good.begin(); it != matches_good.end();) {
-          const auto& pt_current = keypoints_current[it->queryIdx].pt;
-          const auto& pt_next = keypoints_next[it->trainIdx].pt;
-          if (cv::norm(pt_next - pt_current) > median) {
-            it = matches_good.erase(it);
-          }
-          else {
-            ++it;
-          }
-        }
-
-        // Extract corresponding keypoints.
-        std::vector<cv::Point2f> pts_current, pts_next;
-        for (const auto& match : matches_good) {
-          pts_current.push_back(keypoints_current[match.queryIdx].pt);
-          pts_next.push_back(keypoints_next[match.trainIdx].pt);
-        }
-
+        matcher.match(tracks, tracks_finished, keypoints_next, descriptors_next);
         // Debug visualize correspondencies.
+        // Estimate transformation.
+        /*
+        std::vector<unsigned char> mask;
+        tf_next = cv::findHomography(pts_next, pts_current, cv::RANSAC, 3, mask);
         if (debug) {
           for (size_t j = 0; j < pts_current.size(); j++) {
-            cv::arrowedLine(frame_current, static_cast<cv::Point2i>(pts_current[j]), static_cast<cv::Point2i>(pts_next[j]), cv::Scalar(255, 120, 120));
+            cv::Scalar clr;
+            if (mask[j]) {
+              clr = cv::Scalar(255, 120, 120);
+            }
+            else {
+              clr = cv::Scalar(120, 120, 255);
+            }
+            cv::arrowedLine(frame_current, static_cast<cv::Point2i>(pts_current[j]), static_cast<cv::Point2i>(pts_next[j]), clr);
           }
         }
-        // Estimate transformation.
-        tf_next = cv::findHomography(pts_next, pts_current, cv::RANSAC);
+      }
+      */
+      if (debug) {
+        for (const auto& track : tracks) {
+          for (size_t j = 1; j < track.size(); j++) {
+            cv::line(frame_current, static_cast<cv::Point2i>(track[j - 1].pt), static_cast<cv::Point2i>(track[j].pt), track.getDebugColor());
+          }
+        }
       }
     }
     else {
