@@ -10,6 +10,10 @@
 
 #include "video.h"
 
+static inline void printProgress(const size_t frame, const size_t num_frames) {
+  std::cout << static_cast<int>(100.0 * frame / num_frames) << " %..." << std::endl;
+}
+
 template<typename T>
 std::vector<cv::Mat> stabilize(Video& frames, const bool debug) {
   std::vector<cv::Mat> tfs(frames.size());
@@ -21,6 +25,9 @@ std::vector<cv::Mat> stabilize(Video& frames, const bool debug) {
   cv::Mat descriptors_current, descriptors_next;
   detector->detectAndCompute(frames[0], cv::Mat(), keypoints_next, descriptors_next);
   for (size_t i = 0; i < frames.size() - 1; i++) {
+    if (i % 10 == 0) {
+      printProgress(i, frames.size());
+    }
     auto& frame_current = frames[i];
     auto& frame_next = frames[i + 1];
 
@@ -93,6 +100,7 @@ std::vector<cv::Mat> stabilize(Video& frames, const bool debug) {
     }
     tf_next = tfs[i] * tf_next; // Accumulate transforms.
   }
+  printProgress(frames.size(), frames.size());
   return tfs;
 }
 

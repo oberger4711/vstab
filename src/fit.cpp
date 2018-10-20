@@ -15,13 +15,13 @@ std::vector<cv::Point2f> smooth_motion_parameterless(const std::vector<cv::Point
   // Centered costs
   for (size_t i = 0; i < centers.size(); i++) {
     ceres::CostFunction* cost_centered = new ceres::AutoDiffCostFunction<CenteredCostFunctor, 2, 2>(new CenteredCostFunctor(1.0, centers[i]));
-    problem.AddResidualBlock(cost_centered, NULL, &params[2 * i]);
+    problem.AddResidualBlock(cost_centered, nullptr, &params[2 * i]);
   }
 
   // Smoothed costs
   for (size_t i = 1; i < centers.size() - 1; i++) {
     ceres::CostFunction* cost_smoothed = new ceres::AutoDiffCostFunction<SmoothedCostFunctor, 2, 2, 2, 2>(new SmoothedCostFunctor(smoothness));
-    problem.AddResidualBlock(cost_smoothed, NULL, &params[2 * (i - 1)], &params[2 * i], &params[2 * (i + 1)]);
+    problem.AddResidualBlock(cost_smoothed, nullptr, &params[2 * (i - 1)], &params[2 * i], &params[2 * (i + 1)]);
   }
 
   // Optimize.
