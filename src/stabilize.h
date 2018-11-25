@@ -15,6 +15,10 @@ static inline void printProgress(const size_t frame, const size_t num_frames) {
   std::cout << static_cast<int>(100.0 * frame / num_frames) << " %..." << std::endl;
 }
 
+static inline void printProgress(const size_t frame, const size_t num_frames) {
+  std::cout << static_cast<int>(100.0 * frame / num_frames) << " %..." << std::endl;
+}
+
 template<typename T>
 std::vector<cv::Mat> stabilize(Video& frames, const bool debug) {
   std::vector<cv::Mat> tfs(frames.size());
