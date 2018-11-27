@@ -15,10 +15,6 @@ static inline void printProgress(const size_t frame, const size_t num_frames) {
   std::cout << static_cast<int>(100.0 * frame / num_frames) << " %..." << std::endl;
 }
 
-static inline void printProgress(const size_t frame, const size_t num_frames) {
-  std::cout << static_cast<int>(100.0 * frame / num_frames) << " %..." << std::endl;
-}
-
 template<typename T>
 std::vector<cv::Mat> stabilize(Video& frames, const bool debug) {
   std::vector<cv::Mat> tfs(frames.size());
@@ -74,10 +70,15 @@ std::vector<cv::Mat> stabilize(Video& frames, const bool debug) {
       }
       */
       if (debug) {
+        // Viz tracks.
         for (const auto& track : tracks) {
           for (size_t j = 1; j < track.size(); j++) {
             cv::line(frame_current, static_cast<cv::Point2i>(track[j - 1].pt), static_cast<cv::Point2i>(track[j].pt), track.getDebugColor());
           }
+        }
+        // Viz current keypoints.
+        for (const auto& key_point : keypoints_current) {
+          cv::circle(frame_current, static_cast<cv::Point2i>(key_point.pt), 1, cv::Scalar(255, 100, 100));
         }
       }
     }
