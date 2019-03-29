@@ -9,6 +9,7 @@
 #include "opencv2/xfeatures2d.hpp"
 
 #include "video.h"
+#include "registration.h"
 
 template<typename T>
 std::vector<cv::Mat> stabilize(Video& frames, const bool debug) {
@@ -80,7 +81,8 @@ std::vector<cv::Mat> stabilize(Video& frames, const bool debug) {
           }
         }
         // Estimate transformation.
-        tf_next = cv::findHomography(pts_next, pts_current, cv::RANSAC);
+        // tf_next = cv::findHomography(pts_next, pts_current, cv::RANSAC);
+        tf_next = find_homography_extended(pts_next, pts_current, RegistrationMethod::BUCKET_RANSAC);
       }
     }
     else {
