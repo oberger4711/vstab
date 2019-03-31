@@ -2,18 +2,16 @@
 
 #include "opencv2/opencv_modules.hpp"
 
-cv::Mat find_homography_extended(
-    const std::vector<cv::Point2f>& pts_current,
-    const std::vector<cv::Point2f>& pts_next,
+cv::Mat find_homography_extended(cv::InputArray pts_current, cv::InputArray pts_next,
     const RegistrationMethod method) {
   if (method == RegistrationMethod::BUCKET_RANSAC) {
     // Use own implementation of RANSAC improved by bucket selection.
     // See "A robust technique for matching two uncalibrated images through the recovery of the unknown epipolar geometry".
-    find_homography_extended_ransac(pts_current, pts_next);
+    return find_homography_extended_ransac(pts_current, pts_next);
   }
   else {
     // Use standard CV implementation.
-    return cv::findHomography(pts_next, pts_current, static_cast<int>(method));
+    return cv::findHomography(pts_current, pts_next, static_cast<int>(method));
   }
 }
 
@@ -254,6 +252,7 @@ cv::Mat find_homography_extended_ransac(cv::InputArray _points1, cv::InputArray 
   const double defaultRANSACReprojThreshold = 3;
   bool result = false;
 
+
   cv::Mat points1 = _points1.getMat(), points2 = _points2.getMat();
   cv::Mat src, dst, H, tempMask;
   int npoints = -1;
@@ -282,20 +281,18 @@ cv::Mat find_homography_extended_ransac(cv::InputArray _points1, cv::InputArray 
 
   cv::Ptr<BucketRANSACPointSetRegistrator::Callback> cb = cv::makePtr<HomographyEstimatorCallback>();
 
-  if (npoints == 4)
-  {
+  if (npoints == 4) {
     tempMask = cv::Mat::ones(npoints, 1, CV_8U);
     result = cb->runKernel(src, dst, H) > 0;
   }
-  // TODO: Insert own registrator.
-  result = createBucketRANSACPointSetRegistrator(cb, 4, ransacReprojThreshold, confidence, maxIters)->run(src, dst, H, tempMask);
+  else {
+    result = createBucketRANSACPointSetRegistrator(cb, 4, ransacReprojThreshold, confidence, maxIters)->run(src, dst, H, tempMask);
+  }
 
-  if (result && npoints > 4)
-  {
+  if (result && npoints > 4) {
     compressElems(src.ptr<cv::Point2f>(), tempMask.ptr<uchar>(), 1, npoints);
     npoints = compressElems(dst.ptr<cv::Point2f>(), tempMask.ptr<uchar>(), 1, npoints);
-    if (npoints > 0)
-    {
+    if (npoints > 0) {
       cv::Mat src1 = src.rowRange(0, npoints);
       cv::Mat dst1 = dst.rowRange(0, npoints);
       src = src1;
