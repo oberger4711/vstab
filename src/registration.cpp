@@ -1,10 +1,12 @@
 #include "registration.h"
 
+#include <iostream>
+
 // The following is based on lkpyramid.cpp from OpenCV.
 
 static void
 getRTMatrix(const std::vector<cv::Point2f> a, const std::vector<cv::Point2f> b,
-             int count, cv::Mat& M, bool fullAffine)
+            int count, cv::Mat& M, bool fullAffine)
 {
     CV_Assert(M.isContinuous());
 
@@ -76,16 +78,18 @@ getRTMatrix(const std::vector<cv::Point2f> a, const std::vector<cv::Point2f> b,
     }
 }
 
-cv::Mat estimateRigidTransform_extended(cv::InputArray src1, cv::InputArray src2, bool fullAffine)
+cv::Mat estimateRigidTransform_extended(cv::InputArray src1, cv::InputArray src2, bool fullAffine, const SamplingMethod method, std::vector<int>& inlier_mask)
 {
-    return estimateRigidTransform_extended(src1, src2, fullAffine, 500, 0.5, 3);
+    return estimateRigidTransform_extended(src1, src2, fullAffine, method, inlier_mask, 500, 0.5);
 }
 
-cv::Mat estimateRigidTransform_extended(cv::InputArray src1, cv::InputArray src2, bool fullAffine, int ransacMaxIters, double ransacGoodRatio,
-                                    const int ransacSize0)
+cv::Mat estimateRigidTransform_extended(cv::InputArray src1, cv::InputArray src2, const bool fullAffine,
+                                        const SamplingMethod method, std::vector<int>& inlier_mask,
+                                        int ransacMaxIters, double ransacGoodRatio)
 {
     cv::Mat M(2, 3, CV_64F), A = src1.getMat(), B = src2.getMat();
 
+    const int ransacSize0 = 3;
     const int COUNT = 15;
     const int WIDTH = 160, HEIGHT = 120;
 
@@ -99,10 +103,9 @@ cv::Mat estimateRigidTransform_extended(cv::InputArray src1, cv::InputArray src2
     cv::RNG rng((uint64)-1);
     int good_count = 0;
 
-    assert(ransacSize0 < 3 && "ransacSize0 should have value bigger than 2.");
-    assert((ransacGoodRatio > 1 || ransacGoodRatio < 0) && "ransacGoodRatio should have value between 0 and 1");
-    assert((A.size() != B.size()) && "Both input images must have the same size");
-    assert((A.type() != B.type()) && "Both input images must have the same data type");
+    assert((ransacGoodRatio <= 1 || ransacGoodRatio >= 0) && "ransacGoodRatio should have value between 0 and 1");
+    assert((A.size() == B.size()) && "Both input images must have the same size");
+    assert((A.type() == B.type()) && "Both input images must have the same data type");
 
     int count = A.checkVector(2);
 
@@ -111,6 +114,9 @@ cv::Mat estimateRigidTransform_extended(cv::InputArray src1, cv::InputArray src2
     B.reshape(2, count).convertTo(pB, CV_32F);
 
     good_idx.resize(count);
+
+    inlier_mask.clear();
+    inlier_mask.resize(count, 0);
 
     if(count < ransacSize0)
         return cv::Mat();
@@ -138,10 +144,10 @@ cv::Mat estimateRigidTransform_extended(cv::InputArray src1, cv::InputArray src2
                         break;
                     // check that the points are not very close one each other
                     if(fabs(pA[idx[i]].x - pA[idx[j]].x) +
-                        fabs(pA[idx[i]].y - pA[idx[j]].y) < FLT_EPSILON)
+                                    fabs(pA[idx[i]].y - pA[idx[j]].y) < FLT_EPSILON)
                         break;
                     if(fabs(pB[idx[i]].x - pB[idx[j]].x) +
-                        fabs(pB[idx[i]].y - pB[idx[j]].y) < FLT_EPSILON)
+                                    fabs(pB[idx[i]].y - pB[idx[j]].y) < FLT_EPSILON)
                         break;
                 }
 
@@ -166,7 +172,7 @@ cv::Mat estimateRigidTransform_extended(cv::InputArray src1, cv::InputArray src2
                     const double eps = 0.01;
 
                     if(fabs(dax1*day2 - day1*dax2) < eps*std::sqrt(dax1*dax1+day1*day1)*std::sqrt(dax2*dax2+day2*day2) ||
-                        fabs(dbx1*dby2 - dby1*dbx2) < eps*std::sqrt(dbx1*dbx1+dby1*dby1)*std::sqrt(dbx2*dbx2+dby2*dby2))
+                                    fabs(dbx1*dby2 - dby1*dbx2) < eps*std::sqrt(dbx1*dbx1+dby1*dby1)*std::sqrt(dbx2*dbx2+dby2*dby2))
                         continue;
                 }
                 break;
@@ -180,13 +186,13 @@ cv::Mat estimateRigidTransform_extended(cv::InputArray src1, cv::InputArray src2
             continue;
 
         // estimate the transformation using 3 points
-        getRTMatrix(a, b, 3, M, fullAffine);
+        getRTMatrix(a, b, ransacSize0, M, fullAffine);
 
         const double* m = M.ptr<double>();
         for (i = 0, good_count = 0; i < count; i++)
         {
             if(std::abs(m[0]*pA[i].x + m[1]*pA[i].y + m[2] - pB[i].x) +
-                std::abs(m[3]*pA[i].x + m[4]*pA[i].y + m[5] - pB[i].y) < std::max(brect.width,brect.height)*0.05)
+                            std::abs(m[3]*pA[i].x + m[4]*pA[i].y + m[5] - pB[i].y) < std::max(brect.width,brect.height)*0.05)
                 good_idx[good_count++] = i;
         }
 
@@ -210,6 +216,12 @@ cv::Mat estimateRigidTransform_extended(cv::InputArray src1, cv::InputArray src2
     getRTMatrix(pA, pB, good_count, M, fullAffine);
     M.at<double>(0, 2) /= scale;
     M.at<double>(1, 2) /= scale;
+
+    // Set inlier mask.
+    for (i = 0; i < good_count; i++) {
+        j = good_idx[i];
+        inlier_mask[j] = 1;
+    }
 
     return M;
 }

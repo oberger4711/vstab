@@ -55,6 +55,7 @@ std::vector<cv::Mat> stabilize(Video& frames, const bool debug) {
       }
       if (!matches_good.empty()) {
         // Keep only close matches. I. e. closer than the median distance.
+        /*
         std::vector<float> distances(matches_good.size());
         for (size_t i = 0; i < matches_good.size(); i++) {
           const auto& pt_current = keypoints_current[matches_good[i].queryIdx].pt;
@@ -73,6 +74,7 @@ std::vector<cv::Mat> stabilize(Video& frames, const bool debug) {
             ++it;
           }
         }
+        */
 
         // Extract corresponding keypoints.
         std::vector<cv::Point2f> pts_current, pts_next;
@@ -84,17 +86,21 @@ std::vector<cv::Mat> stabilize(Video& frames, const bool debug) {
         // Estimate transform.
         std::vector<int> inlier_mask;
         //tf_next = cv::findHomography(pts_next, pts_current, cv::RANSAC, 3.0, inlier_mask);
-        estimateRigidTransform(pts_next, pts_current, false).copyTo(tf_next(cv::Range(0, 2), cv::Range::all()));
+        estimateRigidTransform_extended(pts_next, pts_current, false, SamplingMethod::RANSAC, inlier_mask)
+                .copyTo(tf_next(cv::Range(0, 2), cv::Range::all()));
 
         // Debug visualize correspondencies.
         if (debug) {
+          assert(inlier_mask.size() == pts_current.size() || inlier_mask.empty());
           std::array<cv::Scalar, 2> colors = {cv::Scalar(100, 100, 255), cv::Scalar(255, 120, 120)};
           for (size_t j = 0; j < pts_current.size(); j++) {
             auto& color = colors[1];
             if (j < inlier_mask.size()) {
               color = colors[inlier_mask[j]];
             }
-            cv::arrowedLine(frame_current, static_cast<cv::Point2i>(pts_current[j]), static_cast<cv::Point2i>(pts_next[j]), color);
+            cv::arrowedLine(frame_current,
+                            static_cast<cv::Point2i>(pts_current[j]),
+                            static_cast<cv::Point2i>(pts_next[j]), color);
           }
         }
       }
