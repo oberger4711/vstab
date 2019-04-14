@@ -14,8 +14,7 @@ class BucketRANSACPointSetRegistrator : public cv::Algorithm
         virtual bool checkSubset(cv::InputArray, cv::InputArray, int) const { return true; }
     };
 
-    BucketRANSACPointSetRegistrator(const cv::Ptr<BucketRANSACPointSetRegistrator::Callback>& _cb=cv::Ptr<BucketRANSACPointSetRegistrator::Callback>(),
-                          int _modelPoints=0, double _threshold=0, double _confidence=0.99, int _maxIters=1000);
+    BucketRANSACPointSetRegistrator(const cv::Ptr<BucketRANSACPointSetRegistrator::Callback>& _cb=cv::Ptr<BucketRANSACPointSetRegistrator::Callback>(), int _modelPoints=0, double _threshold=0, double _confidence=0.99, int _maxIters=1000);
     int findInliers(const cv::Mat& m1, const cv::Mat& m2, const cv::Mat& model, cv::Mat& err, cv::Mat& mask, double thresh) const;
     bool getSubset( const cv::Mat& m1, const cv::Mat& m2, cv::Mat& ms1, cv::Mat& ms2, cv::RNG& rng, int maxAttempts=1000 ) const;
     virtual void setCallback(const cv::Ptr<BucketRANSACPointSetRegistrator::Callback>& cb);

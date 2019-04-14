@@ -4,6 +4,7 @@
 #include <algorithm>
 
 // OpenCV
+#include "opencv2/video.hpp"
 #include "opencv2/calib3d.hpp"
 #include "opencv2/features2d.hpp"
 #include "opencv2/xfeatures2d.hpp"
@@ -21,7 +22,13 @@ std::vector<cv::Mat> stabilize(Video& frames, const bool debug) {
   std::vector<cv::KeyPoint> keypoints_current, keypoints_next;
   cv::Mat descriptors_current, descriptors_next;
   detector->detectAndCompute(frames[0], cv::Mat(), keypoints_next, descriptors_next);
+
+  std::cout << "0 %" << std::endl;
   for (size_t i = 0; i < frames.size() - 1; i++) {
+    // Progress output.
+    const size_t percent = static_cast<size_t>((static_cast<float>(i) / frames.size()) * 100);
+    std::cout << "\e[1A" << percent << " %   " << std::endl;
+
     auto& frame_current = frames[i];
     auto& frame_next = frames[i + 1];
 
@@ -74,15 +81,22 @@ std::vector<cv::Mat> stabilize(Video& frames, const bool debug) {
           pts_next.push_back(keypoints_next[match.trainIdx].pt);
         }
 
+        // Estimate transform.
+        std::vector<int> inlier_mask;
+        //tf_next = cv::findHomography(pts_next, pts_current, cv::RANSAC, 3.0, inlier_mask);
+        cv::estimateRigidTransform(pts_next, pts_current, false).copyTo(tf_next(cv::Range(0, 2), cv::Range::all()));
+
         // Debug visualize correspondencies.
         if (debug) {
+          std::array<cv::Scalar, 2> colors = {cv::Scalar(100, 100, 255), cv::Scalar(255, 120, 120)};
           for (size_t j = 0; j < pts_current.size(); j++) {
-            cv::arrowedLine(frame_current, static_cast<cv::Point2i>(pts_current[j]), static_cast<cv::Point2i>(pts_next[j]), cv::Scalar(255, 120, 120));
+            auto& color = colors[1];
+            if (j < inlier_mask.size()) {
+              color = colors[inlier_mask[j]];
+            }
+            cv::arrowedLine(frame_current, static_cast<cv::Point2i>(pts_current[j]), static_cast<cv::Point2i>(pts_next[j]), color);
           }
         }
-        // Estimate transformation.
-        // tf_next = cv::findHomography(pts_next, pts_current, cv::RANSAC);
-        tf_next = find_homography_extended(pts_next, pts_current, RegistrationMethod::BUCKET_RANSAC);
       }
     }
     else {

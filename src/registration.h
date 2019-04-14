@@ -29,8 +29,7 @@ enum class RegistrationMethod {
   BUCKET_RANSAC
 };
 
-cv::Mat find_homography_extended(const std::vector<cv::Point2f>& pts_current,
-    const std::vector<cv::Point2f>& pts_next,
+cv::Mat find_homography_extended(cv::InputArray pts_current, cv::InputArray pts_next,
     const RegistrationMethod method = RegistrationMethod::ALL);
 
 cv::Mat find_homography_extended_ransac(cv::InputArray srcPoints, cv::InputArray dstPoints,
