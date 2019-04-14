@@ -1,8 +1,6 @@
 #include "registration.h"
 
-#include "opencv2/opencv_modules.hpp"
-
-// This is based on lkpyramid.cpp from OpenCV.
+// The following is based on lkpyramid.cpp from OpenCV.
 
 static void
 getRTMatrix(const std::vector<cv::Point2f> a, const std::vector<cv::Point2f> b,
