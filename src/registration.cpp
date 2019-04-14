@@ -2,319 +2,216 @@
 
 #include "opencv2/opencv_modules.hpp"
 
-cv::Mat find_homography_extended(cv::InputArray pts_current, cv::InputArray pts_next,
-    const RegistrationMethod method) {
-  if (method == RegistrationMethod::BUCKET_RANSAC) {
-    // Use own implementation of RANSAC improved by bucket selection.
-    // See "A robust technique for matching two uncalibrated images through the recovery of the unknown epipolar geometry".
-    return find_homography_extended_ransac(pts_current, pts_next);
-  }
-  else {
-    // Use standard CV implementation.
-    return cv::findHomography(pts_current, pts_next, static_cast<int>(method));
-  }
+// This is based on lkpyramid.cpp from OpenCV.
+
+static void
+getRTMatrix(const std::vector<cv::Point2f> a, const std::vector<cv::Point2f> b,
+             int count, cv::Mat& M, bool fullAffine)
+{
+    CV_Assert(M.isContinuous());
+
+    if(fullAffine)
+    {
+        double sa[6][6]={{0.}}, sb[6]={0.};
+        cv::Mat A(6, 6, CV_64F, &sa[0][0]), B(6, 1, CV_64F, sb);
+        cv::Mat MM = M.reshape(1, 6);
+
+        for (int i = 0; i < count; i++)
+        {
+            sa[0][0] += a[i].x*a[i].x;
+            sa[0][1] += a[i].y*a[i].x;
+            sa[0][2] += a[i].x;
+
+            sa[1][1] += a[i].y*a[i].y;
+            sa[1][2] += a[i].y;
+
+            sb[0] += a[i].x*b[i].x;
+            sb[1] += a[i].y*b[i].x;
+            sb[2] += b[i].x;
+            sb[3] += a[i].x*b[i].y;
+            sb[4] += a[i].y*b[i].y;
+            sb[5] += b[i].y;
+        }
+
+        sa[3][4] = sa[4][3] = sa[1][0] = sa[0][1];
+        sa[3][5] = sa[5][3] = sa[2][0] = sa[0][2];
+        sa[4][5] = sa[5][4] = sa[2][1] = sa[1][2];
+
+        sa[3][3] = sa[0][0];
+        sa[4][4] = sa[1][1];
+        sa[5][5] = sa[2][2] = count;
+
+        cv::solve(A, B, MM, cv::DECOMP_EIG);
+    }
+    else
+    {
+        double sa[4][4]={{0.}}, sb[4]={0.}, m[4] = {0};
+        cv::Mat A(4, 4, CV_64F, sa), B(4, 1, CV_64F, sb);
+        cv::Mat MM(4, 1, CV_64F, m);
+
+        for (int i = 0; i < count; i++)
+        {
+            sa[0][0] += a[i].x*a[i].x + a[i].y*a[i].y;
+            sa[0][2] += a[i].x;
+            sa[0][3] += a[i].y;
+
+            sb[0] += a[i].x*b[i].x + a[i].y*b[i].y;
+            sb[1] += a[i].x*b[i].y - a[i].y*b[i].x;
+            sb[2] += b[i].x;
+            sb[3] += b[i].y;
+        }
+
+        sa[1][1] = sa[0][0];
+        sa[2][1] = sa[1][2] = -sa[0][3];
+        sa[3][1] = sa[1][3] = sa[2][0] = sa[0][2];
+        sa[2][2] = sa[3][3] = count;
+        sa[3][0] = sa[0][3];
+
+        cv::solve(A, B, MM, cv::DECOMP_EIG);
+
+        double* om = M.ptr<double>();
+        om[0] = om[4] = m[0];
+        om[1] = -m[1];
+        om[3] = m[1];
+        om[2] = m[2];
+        om[5] = m[3];
+    }
 }
 
-static inline bool haveCollinearPoints(const cv::Mat& m, int count)
+cv::Mat estimateRigidTransform_extended(cv::InputArray src1, cv::InputArray src2, bool fullAffine)
 {
-    int j, k, i = count-1;
-    const cv::Point2f* ptr = m.ptr<cv::Point2f>();
-
-    // check that the i-th selected point does not belong
-    // to a line connecting some previously selected points
-    // also checks that points are not too close to each other
-    for (j = 0; j < i; j++)
-    {
-        double dx1 = ptr[j].x - ptr[i].x;
-        double dy1 = ptr[j].y - ptr[i].y;
-        for (k = 0; k < j; k++)
-        {
-            double dx2 = ptr[k].x - ptr[i].x;
-            double dy2 = ptr[k].y - ptr[i].y;
-            if (fabs(dx2*dy1 - dy2*dx1) <= FLT_EPSILON*(fabs(dx1) + fabs(dy1) + fabs(dx2) + fabs(dy2)))
-                return true;
-        }
-    }
-    return false;
+    return estimateRigidTransform_extended(src1, src2, fullAffine, 500, 0.5, 3);
 }
 
-class HomographyEstimatorCallback : public BucketRANSACPointSetRegistrator::Callback
+cv::Mat estimateRigidTransform_extended(cv::InputArray src1, cv::InputArray src2, bool fullAffine, int ransacMaxIters, double ransacGoodRatio,
+                                    const int ransacSize0)
 {
-public:
-    bool checkSubset(cv::InputArray _ms1, cv::InputArray _ms2, int count) const CV_OVERRIDE
-    {
-        cv::Mat ms1 = _ms1.getMat(), ms2 = _ms2.getMat();
-        if (haveCollinearPoints(ms1, count) || haveCollinearPoints(ms2, count))
-            return false;
+    cv::Mat M(2, 3, CV_64F), A = src1.getMat(), B = src2.getMat();
 
-        // We check whether the minimal set of points for the homography estimation
-        // are geometrically consistent. We check if every 3 correspondences sets
-        // fulfills the constraint.
-        //
-        // The usefullness of this constraint is explained in the paper:
-        //
-        // "Speeding-up homography estimation in mobile devices"
-        // Journal of Real-Time Image Processing. 2013. DOI: 10.1007/s11554-012-0314-1
-        // Pablo Marquez-Neila, Javier Lopez-Alberca, Jose M. Buenaposada, Luis Baumela
-        if (count == 4)
-        {
-            static const int tt[][3] = {{0, 1, 2}, {1, 2, 3}, {0, 2, 3}, {0, 1, 3}};
-            const cv::Point2f* src = ms1.ptr<cv::Point2f>();
-            const cv::Point2f* dst = ms2.ptr<cv::Point2f>();
-            int negative = 0;
+    const int COUNT = 15;
+    const int WIDTH = 160, HEIGHT = 120;
 
-            for (int i = 0; i < 4; i++)
-            {
-                const int* t = tt[i];
-                cv::Matx33d A(src[t[0]].x, src[t[0]].y, 1., src[t[1]].x, src[t[1]].y, 1., src[t[2]].x, src[t[2]].y, 1.);
-                cv::Matx33d B(dst[t[0]].x, dst[t[0]].y, 1., dst[t[1]].x, dst[t[1]].y, 1., dst[t[2]].x, dst[t[2]].y, 1.);
+    std::vector<cv::Point2f> pA, pB;
+    std::vector<int> good_idx;
+    std::vector<uchar> status;
 
-                negative += cv::determinant(A)*cv::determinant(B) < 0;
-            }
-            if (negative != 0 && negative != 4)
-                return false;
-        }
-        return true;
-    }
+    double scale = 1.;
+    int i, j, k, k1;
 
-    /**
-     * Normalization method:
-     *  - $x$ and $y$ coordinates are normalized independently
-     *  - first the coordinates are shifted so that the average coordinate is \f$(0,0)\f$
-     *  - then the coordinates are scaled so that the average L1 norm is 1, i.e,
-     *  the average L1 norm of the \f$x\f$ coordinates is 1 and the average
-     *  L1 norm of the \f$y\f$ coordinates is also 1.
-     *
-     * @param _m1 source points containing (X,Y), depth is CV_32F with 1 column 2 channels or
-     *            2 columns 1 channel
-     * @param _m2 destination points containing (x,y), depth is CV_32F with 1 column 2 channels or
-     *            2 columns 1 channel
-     * @param _model, CV_64FC1, 3x3, normalized, i.e., the last element is 1
-     */
-    int runKernel(cv::InputArray _m1, cv::InputArray _m2, cv::OutputArray _model) const override
-    {
-        cv::Mat m1 = _m1.getMat(), m2 = _m2.getMat();
-        int i, count = m1.checkVector(2);
-        const cv::Point2f* M = m1.ptr<cv::Point2f>();
-        const cv::Point2f* m = m2.ptr<cv::Point2f>();
+    cv::RNG rng((uint64)-1);
+    int good_count = 0;
 
-        double LtL[9][9], W[9][1], V[9][9];
-        cv::Mat _LtL( 9, 9, CV_64F, &LtL[0][0] );
-        cv::Mat matW( 9, 1, CV_64F, W );
-        cv::Mat matV( 9, 9, CV_64F, V );
-        cv::Mat _H0( 3, 3, CV_64F, V[8] );
-        cv::Mat _Htemp( 3, 3, CV_64F, V[7] );
-        cv::Point2d cM(0,0), cm(0,0), sM(0,0), sm(0,0);
+    assert(ransacSize0 < 3 && "ransacSize0 should have value bigger than 2.");
+    assert((ransacGoodRatio > 1 || ransacGoodRatio < 0) && "ransacGoodRatio should have value between 0 and 1");
+    assert((A.size() != B.size()) && "Both input images must have the same size");
+    assert((A.type() != B.type()) && "Both input images must have the same data type");
 
-        for( i = 0; i < count; i++ )
-        {
-            cm.x += m[i].x; cm.y += m[i].y;
-            cM.x += M[i].x; cM.y += M[i].y;
-        }
+    int count = A.checkVector(2);
 
-        cm.x /= count;
-        cm.y /= count;
-        cM.x /= count;
-        cM.y /= count;
+    assert(count > 0);
+    A.reshape(2, count).convertTo(pA, CV_32F);
+    B.reshape(2, count).convertTo(pB, CV_32F);
 
-        for( i = 0; i < count; i++ )
-        {
-            sm.x += fabs(m[i].x - cm.x);
-            sm.y += fabs(m[i].y - cm.y);
-            sM.x += fabs(M[i].x - cM.x);
-            sM.y += fabs(M[i].y - cM.y);
-        }
+    good_idx.resize(count);
 
-        if( fabs(sm.x) < DBL_EPSILON || fabs(sm.y) < DBL_EPSILON ||
-            fabs(sM.x) < DBL_EPSILON || fabs(sM.y) < DBL_EPSILON )
-            return 0;
-        sm.x = count/sm.x; sm.y = count/sm.y;
-        sM.x = count/sM.x; sM.y = count/sM.y;
-
-        double invHnorm[9] = { 1./sm.x, 0, cm.x, 0, 1./sm.y, cm.y, 0, 0, 1 };
-        double Hnorm2[9] = { sM.x, 0, -cM.x*sM.x, 0, sM.y, -cM.y*sM.y, 0, 0, 1 };
-        cv::Mat _invHnorm( 3, 3, CV_64FC1, invHnorm );
-        cv::Mat _Hnorm2( 3, 3, CV_64FC1, Hnorm2 );
-
-        _LtL.setTo(cv::Scalar::all(0));
-        for( i = 0; i < count; i++ )
-        {
-            double x = (m[i].x - cm.x)*sm.x, y = (m[i].y - cm.y)*sm.y;
-            double X = (M[i].x - cM.x)*sM.x, Y = (M[i].y - cM.y)*sM.y;
-            double Lx[] = { X, Y, 1, 0, 0, 0, -x*X, -x*Y, -x };
-            double Ly[] = { 0, 0, 0, X, Y, 1, -y*X, -y*Y, -y };
-            int j, k;
-            for( j = 0; j < 9; j++ )
-                for( k = j; k < 9; k++ )
-                    LtL[j][k] += Lx[j]*Lx[k] + Ly[j]*Ly[k];
-        }
-        completeSymm( _LtL );
-
-        eigen( _LtL, matW, matV );
-        _Htemp = _invHnorm*_H0;
-        _H0 = _Htemp*_Hnorm2;
-        _H0.convertTo(_model, _H0.type(), 1./_H0.at<double>(2,2) );
-
-        return 1;
-    }
-
-    /**
-     * Compute the reprojection error.
-     * m2 = H*m1
-     * @param _m1 depth CV_32F, 1-channel with 2 columns or 2-channel with 1 column
-     * @param _m2 depth CV_32F, 1-channel with 2 columns or 2-channel with 1 column
-     * @param _model CV_64FC1, 3x3
-     * @param _err, output, CV_32FC1, square of the L2 norm
-     */
-    void computeError( cv::InputArray _m1, cv::InputArray _m2, cv::InputArray _model, cv::OutputArray _err ) const CV_OVERRIDE
-    {
-        cv::Mat m1 = _m1.getMat(), m2 = _m2.getMat(), model = _model.getMat();
-        int i, count = m1.checkVector(2);
-        const cv::Point2f* M = m1.ptr<cv::Point2f>();
-        const cv::Point2f* m = m2.ptr<cv::Point2f>();
-        const double* H = model.ptr<double>();
-        float Hf[] = { (float)H[0], (float)H[1], (float)H[2], (float)H[3], (float)H[4], (float)H[5], (float)H[6], (float)H[7] };
-
-        _err.create(count, 1, CV_32F);
-        float* err = _err.getMat().ptr<float>();
-
-        for( i = 0; i < count; i++ )
-        {
-            float ww = 1.f/(Hf[6]*M[i].x + Hf[7]*M[i].y + 1.f);
-            float dx = (Hf[0]*M[i].x + Hf[1]*M[i].y + Hf[2])*ww - m[i].x;
-            float dy = (Hf[3]*M[i].x + Hf[4]*M[i].y + Hf[5])*ww - m[i].y;
-            err[i] = dx*dx + dy*dy;
-        }
-    }
-};
-
-class HomographyRefineCallback : public LMSolver::Callback
-{
-public:
-    HomographyRefineCallback(cv::InputArray _src, cv::InputArray _dst)
-    {
-        src = _src.getMat();
-        dst = _dst.getMat();
-    }
-
-    bool compute(cv::InputArray _param, cv::OutputArray _err, cv::OutputArray _Jac) const CV_OVERRIDE
-    {
-        int i, count = src.checkVector(2);
-        cv::Mat param = _param.getMat();
-        _err.create(count*2, 1, CV_64F);
-        cv::Mat err = _err.getMat(), J;
-        if( _Jac.needed())
-        {
-            _Jac.create(count*2, param.rows, CV_64F);
-            J = _Jac.getMat();
-            CV_Assert( J.isContinuous() && J.cols == 8 );
-        }
-
-        const cv::Point2f* M = src.ptr<cv::Point2f>();
-        const cv::Point2f* m = dst.ptr<cv::Point2f>();
-        const double* h = param.ptr<double>();
-        double* errptr = err.ptr<double>();
-        double* Jptr = J.data ? J.ptr<double>() : 0;
-
-        for( i = 0; i < count; i++ )
-        {
-            double Mx = M[i].x, My = M[i].y;
-            double ww = h[6]*Mx + h[7]*My + 1.;
-            ww = fabs(ww) > DBL_EPSILON ? 1./ww : 0;
-            double xi = (h[0]*Mx + h[1]*My + h[2])*ww;
-            double yi = (h[3]*Mx + h[4]*My + h[5])*ww;
-            errptr[i*2] = xi - m[i].x;
-            errptr[i*2+1] = yi - m[i].y;
-
-            if( Jptr )
-            {
-                Jptr[0] = Mx*ww; Jptr[1] = My*ww; Jptr[2] = ww;
-                Jptr[3] = Jptr[4] = Jptr[5] = 0.;
-                Jptr[6] = -Mx*ww*xi; Jptr[7] = -My*ww*xi;
-                Jptr[8] = Jptr[9] = Jptr[10] = 0.;
-                Jptr[11] = Mx*ww; Jptr[12] = My*ww; Jptr[13] = ww;
-                Jptr[14] = -Mx*ww*yi; Jptr[15] = -My*ww*yi;
-
-                Jptr += 16;
-            }
-        }
-
-        return true;
-    }
-
-    cv::Mat src, dst;
-};
-
-// Implementation based on OpenCV.
-cv::Mat find_homography_extended_ransac(cv::InputArray _points1, cv::InputArray _points2,
-    double ransacReprojThreshold, cv::OutputArray _mask,
-    const int maxIters, const double confidence) {
-  const double defaultRANSACReprojThreshold = 3;
-  bool result = false;
-
-
-  cv::Mat points1 = _points1.getMat(), points2 = _points2.getMat();
-  cv::Mat src, dst, H, tempMask;
-  int npoints = -1;
-
-  for (int i = 1; i <= 2; i++)
-  {
-    cv::Mat& p = i == 1 ? points1 : points2;
-    cv::Mat& m = i == 1 ? src : dst;
-    npoints = p.checkVector(2, -1, false);
-    if (npoints < 0 )
-    {
-      npoints = p.checkVector(3, -1, false);
-      if (npoints < 0)
-        CV_Error(cv::Error::StsBadArg, "The input arrays should be 2D or 3D point sets");
-      if (npoints == 0)
+    if(count < ransacSize0)
         return cv::Mat();
-      cv::convertPointsFromHomogeneous(p, p);
+
+    cv::Rect brect = boundingRect(pB);
+
+    std::vector<cv::Point2f> a(ransacSize0);
+    std::vector<cv::Point2f> b(ransacSize0);
+
+    // RANSAC stuff:
+    // 1. find the consensus
+    for (k = 0; k < ransacMaxIters; k++)
+    {
+        std::vector<int> idx(ransacSize0);
+        // choose random 3 non-complanar points from A & B
+        for (i = 0; i < ransacSize0; i++)
+        {
+            for (k1 = 0; k1 < ransacMaxIters; k1++)
+            {
+                idx[i] = rng.uniform(0, count);
+
+                for (j = 0; j < i; j++)
+                {
+                    if(idx[j] == idx[i])
+                        break;
+                    // check that the points are not very close one each other
+                    if(fabs(pA[idx[i]].x - pA[idx[j]].x) +
+                        fabs(pA[idx[i]].y - pA[idx[j]].y) < FLT_EPSILON)
+                        break;
+                    if(fabs(pB[idx[i]].x - pB[idx[j]].x) +
+                        fabs(pB[idx[i]].y - pB[idx[j]].y) < FLT_EPSILON)
+                        break;
+                }
+
+                if(j < i)
+                    continue;
+
+                if(i+1 == ransacSize0)
+                {
+                    // additional check for non-complanar vectors
+                    a[0] = pA[idx[0]];
+                    a[1] = pA[idx[1]];
+                    a[2] = pA[idx[2]];
+
+                    b[0] = pB[idx[0]];
+                    b[1] = pB[idx[1]];
+                    b[2] = pB[idx[2]];
+
+                    double dax1 = a[1].x - a[0].x, day1 = a[1].y - a[0].y;
+                    double dax2 = a[2].x - a[0].x, day2 = a[2].y - a[0].y;
+                    double dbx1 = b[1].x - b[0].x, dby1 = b[1].y - b[0].y;
+                    double dbx2 = b[2].x - b[0].x, dby2 = b[2].y - b[0].y;
+                    const double eps = 0.01;
+
+                    if(fabs(dax1*day2 - day1*dax2) < eps*std::sqrt(dax1*dax1+day1*day1)*std::sqrt(dax2*dax2+day2*day2) ||
+                        fabs(dbx1*dby2 - dby1*dbx2) < eps*std::sqrt(dbx1*dbx1+dby1*dby1)*std::sqrt(dbx2*dbx2+dby2*dby2))
+                        continue;
+                }
+                break;
+            }
+
+            if(k1 >= ransacMaxIters)
+                break;
+        }
+
+        if(i < ransacSize0)
+            continue;
+
+        // estimate the transformation using 3 points
+        getRTMatrix(a, b, 3, M, fullAffine);
+
+        const double* m = M.ptr<double>();
+        for (i = 0, good_count = 0; i < count; i++)
+        {
+            if(std::abs(m[0]*pA[i].x + m[1]*pA[i].y + m[2] - pB[i].x) +
+                std::abs(m[3]*pA[i].x + m[4]*pA[i].y + m[5] - pB[i].y) < std::max(brect.width,brect.height)*0.05)
+                good_idx[good_count++] = i;
+        }
+
+        if(good_count >= count*ransacGoodRatio)
+            break;
     }
-    p.reshape(2, npoints).convertTo(m, CV_32F);
-  }
 
-  CV_Assert( src.checkVector(2) == dst.checkVector(2) );
+    if(k >= ransacMaxIters)
+        return cv::Mat();
 
-  if (ransacReprojThreshold <= 0)
-    ransacReprojThreshold = defaultRANSACReprojThreshold;
-
-  cv::Ptr<BucketRANSACPointSetRegistrator::Callback> cb = cv::makePtr<HomographyEstimatorCallback>();
-
-  if (npoints == 4) {
-    tempMask = cv::Mat::ones(npoints, 1, CV_8U);
-    result = cb->runKernel(src, dst, H) > 0;
-  }
-  else {
-    result = createBucketRANSACPointSetRegistrator(cb, 4, ransacReprojThreshold, confidence, maxIters)->run(src, dst, H, tempMask);
-  }
-
-  if (result && npoints > 4) {
-    compressElems(src.ptr<cv::Point2f>(), tempMask.ptr<uchar>(), 1, npoints);
-    npoints = compressElems(dst.ptr<cv::Point2f>(), tempMask.ptr<uchar>(), 1, npoints);
-    if (npoints > 0) {
-      cv::Mat src1 = src.rowRange(0, npoints);
-      cv::Mat dst1 = dst.rowRange(0, npoints);
-      src = src1;
-      dst = dst1;
-      cb->runKernel( src, dst, H );
-      cv::Mat H8(8, 1, CV_64F, H.ptr<double>());
-      createLMSolver(cv::makePtr<HomographyRefineCallback>(src, dst), 10)->run(H8);
+    if(good_count < count)
+    {
+        for (i = 0; i < good_count; i++)
+        {
+            j = good_idx[i];
+            pA[i] = pA[j];
+            pB[i] = pB[j];
+        }
     }
-  }
 
-  if (result)
-  {
-    if (_mask.needed())
-      tempMask.copyTo(_mask);
-  }
-  else
-  {
-    H.release();
-    if (_mask.needed() ) {
-      tempMask = cv::Mat::zeros(npoints >= 0 ? npoints : 0, 1, CV_8U);
-      tempMask.copyTo(_mask);
-    }
-  }
-  return H;
+    getRTMatrix(pA, pB, good_count, M, fullAffine);
+    M.at<double>(0, 2) /= scale;
+    M.at<double>(1, 2) /= scale;
+
+    return M;
 }

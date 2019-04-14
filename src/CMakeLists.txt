@@ -14,8 +14,6 @@ ADD_EXECUTABLE(vstab
   ${PROJECT_SOURCE_DIR}/video.cpp
   ${PROJECT_SOURCE_DIR}/stabilize.cpp
   ${PROJECT_SOURCE_DIR}/registration.cpp
-  ${PROJECT_SOURCE_DIR}/lm_solver.cpp
-  ${PROJECT_SOURCE_DIR}/bucket_ransac.cpp
   ${PROJECT_SOURCE_DIR}/crop.cpp
   ${PROJECT_SOURCE_DIR}/fit.cpp
 )

@@ -84,7 +84,7 @@ std::vector<cv::Mat> stabilize(Video& frames, const bool debug) {
         // Estimate transform.
         std::vector<int> inlier_mask;
         //tf_next = cv::findHomography(pts_next, pts_current, cv::RANSAC, 3.0, inlier_mask);
-        cv::estimateRigidTransform(pts_next, pts_current, false).copyTo(tf_next(cv::Range(0, 2), cv::Range::all()));
+        estimateRigidTransform(pts_next, pts_current, false).copyTo(tf_next(cv::Range(0, 2), cv::Range::all()));
 
         // Debug visualize correspondencies.
         if (debug) {
@@ -102,13 +102,16 @@ std::vector<cv::Mat> stabilize(Video& frames, const bool debug) {
     else {
       // No keypoints available for estimation.
       std::cerr << "Warning: No keypoints in current or next frame." << std::endl;
+      std::cout << std::endl;
     }
 
     if (tf_next.empty()) {
       std::cerr << "Warning: Empty homography for frame " << i << "." << std::endl;
+      std::cout << std::endl;
     }
     tf_next = tfs[i] * tf_next; // Accumulate transforms.
   }
+  std::cout << "\e[1A" << "100 %   " << std::endl;
   return tfs;
 }
 
