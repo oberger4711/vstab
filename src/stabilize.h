@@ -91,13 +91,10 @@ std::vector<cv::Mat> stabilize(Video& frames, const bool debug) {
 
         // Debug visualize correspondencies.
         if (debug) {
-          assert(inlier_mask.size() == pts_current.size() || inlier_mask.empty());
+          assert(inlier_mask.size() == pts_current.size());
           std::array<cv::Scalar, 2> colors = {cv::Scalar(100, 100, 255), cv::Scalar(255, 120, 120)};
           for (size_t j = 0; j < pts_current.size(); j++) {
-            auto& color = colors[1];
-            if (j < inlier_mask.size()) {
-              color = colors[inlier_mask[j]];
-            }
+            auto& color = colors[inlier_mask[j]];
             cv::arrowedLine(frame_current,
                             static_cast<cv::Point2i>(pts_current[j]),
                             static_cast<cv::Point2i>(pts_next[j]), color);

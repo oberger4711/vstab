@@ -17,4 +17,4 @@ cv::Mat estimateRigidTransform_extended(cv::InputArray src1, cv::InputArray src2
 
 cv::Mat estimateRigidTransform_extended(cv::InputArray src1, cv::InputArray src2, const bool fullAffine,
                                         const SamplingMethod method, std::vector<int>& inlier_mask,
-                                        int ransacMaxIters, double ransacGoodRatio);
+                                        int ransacMaxIters, double ransacGoodRatio, const float inlier_threshold);

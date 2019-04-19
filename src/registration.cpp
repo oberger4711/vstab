@@ -80,12 +80,12 @@ getRTMatrix(const std::vector<cv::Point2f> a, const std::vector<cv::Point2f> b,
 
 cv::Mat estimateRigidTransform_extended(cv::InputArray src1, cv::InputArray src2, bool fullAffine, const SamplingMethod method, std::vector<int>& inlier_mask)
 {
-    return estimateRigidTransform_extended(src1, src2, fullAffine, method, inlier_mask, 500, 0.5);
+    return estimateRigidTransform_extended(src1, src2, fullAffine, method, inlier_mask, 500, 0.5, 0.04);
 }
 
 cv::Mat estimateRigidTransform_extended(cv::InputArray src1, cv::InputArray src2, const bool fullAffine,
                                         const SamplingMethod method, std::vector<int>& inlier_mask,
-                                        int ransacMaxIters, double ransacGoodRatio)
+                                        int ransacMaxIters, double ransacGoodRatio, const float inlier_threshold)
 {
     cv::Mat M(2, 3, CV_64F), A = src1.getMat(), B = src2.getMat();
 
@@ -192,7 +192,7 @@ cv::Mat estimateRigidTransform_extended(cv::InputArray src1, cv::InputArray src2
         for (i = 0, good_count = 0; i < count; i++)
         {
             if(std::abs(m[0]*pA[i].x + m[1]*pA[i].y + m[2] - pB[i].x) +
-                            std::abs(m[3]*pA[i].x + m[4]*pA[i].y + m[5] - pB[i].y) < std::max(brect.width,brect.height)*0.05)
+                            std::abs(m[3]*pA[i].x + m[4]*pA[i].y + m[5] - pB[i].y) < std::max(brect.width,brect.height) * inlier_threshold)
                 good_idx[good_count++] = i;
         }
 
@@ -200,8 +200,10 @@ cv::Mat estimateRigidTransform_extended(cv::InputArray src1, cv::InputArray src2
             break;
     }
 
-    if(k >= ransacMaxIters)
-        return cv::Mat();
+    if (k >= ransacMaxIters) {
+      std::cout << "Warning: Reached RANSAC max iterations." << std::endl;
+      return cv::Mat();
+    }
 
     if(good_count < count)
     {
@@ -218,9 +220,9 @@ cv::Mat estimateRigidTransform_extended(cv::InputArray src1, cv::InputArray src2
     M.at<double>(1, 2) /= scale;
 
     // Set inlier mask.
-    for (i = 0; i < good_count; i++) {
-        j = good_idx[i];
-        inlier_mask[j] = 1;
+    for (size_t l = 0; l < good_count; l++) {
+        const auto i_good = good_idx[l];
+        inlier_mask[i_good] = 1;
     }
 
     return M;
