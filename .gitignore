@@ -1,2 +1,4 @@
 build/
 data/
+debug/
+src/CMakeLists.txt.user
