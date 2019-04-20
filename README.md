@@ -33,7 +33,7 @@ Run the following to find out how to use it:
 ## Algorithm
 This is the pipeline:
 1. Detect keypoints and descriptors with SIFT in each frame.
-2. Estimate homography transformation between two consecutive frames using RANSAC to find keypoint correspondencies.
+2. Estimate transformation between two consecutive frames using RANSAC to find keypoint correspondencies.
 The transformation can be undone which ideally results in video of no camera motion.
 3. Smoothen camera motion by regressing a translation for each frame using non-linear Least Squares.
 The following two costs are minimized in the process:
