@@ -80,14 +80,17 @@ std::vector<cv::Mat> stabilize(Video& frames, const bool debug) {
           pts_next.push_back(keypoints_next[match.trainIdx].pt);
         }
 
+        // Estimate transformation.
+        std::vector<int> inlier_mask;
+        tf_next = cv::findHomography(pts_next, pts_current, cv::RANSAC, 3.0, inlier_mask);
+
         // Debug visualize correspondencies.
         if (debug) {
+          std::array<cv::Scalar, 2> color = {cv::Scalar(100, 100, 255), cv::Scalar(255, 120, 120)};
           for (size_t j = 0; j < pts_current.size(); j++) {
-            cv::arrowedLine(frame_current, static_cast<cv::Point2i>(pts_current[j]), static_cast<cv::Point2i>(pts_next[j]), cv::Scalar(255, 120, 120));
+            cv::arrowedLine(frame_current, static_cast<cv::Point2i>(pts_current[j]), static_cast<cv::Point2i>(pts_next[j]), color[inlier_mask[j]]);
           }
         }
-        // Estimate transformation.
-        tf_next = cv::findHomography(pts_next, pts_current, cv::RANSAC);
       }
     }
     else {
