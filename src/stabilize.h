@@ -13,12 +13,10 @@
 #include "registration.h"
 
 struct StabilizationParameters {
-  float min_key_frame_overlap = 0.7;
+  float min_key_frame_overlap = 0.3;
 };
 
 std::vector<cv::DMatch> matchKeyPoints(const cv::Mat& descriptors_reference, const cv::Mat& descriptors_next);
-
-cv::Mat estimateTransform(std::vector<cv::Point2f> key_points_reference, std::vector<cv::Point2f
 
 template<typename T>
 std::vector<cv::Mat> stabilize(Video& frames, const bool debug) {
@@ -57,58 +55,63 @@ std::vector<cv::Mat> stabilize(Video& frames, const bool debug) {
     std::vector<cv::Point2f> good_key_points_key_frame, good_key_points_next;
     std::vector<int> inlier_mask;
     // Try to match against key frame first but create new key frame if overlap is too low.
-    for (int j = 0; !matched_with_good_overlap && j < 2; j++) {
-      if (!descriptors_key_frame.empty() && !descriptors_next.empty()) {
-        // Find key point matches.
-        std::vector<cv::DMatch> matches_good = matchKeyPoints(descriptors_key_frame, descriptors_next);
+    if (descriptors_next.empty()) {
+      // No key points available for estimation.
+      std::cerr << "Warning: No key points in next frame. Skipping frame." << std::endl << std::endl;
+      continue;
+    }
+    // Find key point matches.
+    std::vector<cv::DMatch> matches_good = matchKeyPoints(descriptors_key_frame, descriptors_next);
 
-        if (matches_good.empty()) {
-          // Extract corresponding key points.
-          for (const auto& match : matches_good) {
-            good_key_points_key_frame.push_back(key_points_key_frame[match.queryIdx].pt);
-            good_key_points_next.push_back(key_points_next[match.trainIdx].pt);
-          }
+    // Extract corresponding key points.
+    for (const auto& match : matches_good) {
+      good_key_points_key_frame.push_back(key_points_key_frame[match.queryIdx].pt);
+      good_key_points_next.push_back(key_points_next[match.trainIdx].pt);
+    }
 
-          // Estimate transform.
-          inlier_mask.clear();
-          //tf_next_estimated = cv::findHomography(good_key_points_next, good_key_points_key_frame, cv::RANSAC, 3.0, inlier_mask);
-          estimateRigidTransform_extended(good_key_points_next, good_key_points_key_frame, false, SamplingMethod::RANSAC, inlier_mask)
-                  .copyTo(tf_next_estimated(cv::Range(0, 2), cv::Range::all()));
+    // Estimate transform.
+    inlier_mask.clear();
+    //tf_next_estimated = cv::findHomography(good_key_points_next, good_key_points_key_frame, cv::RANSAC, 3.0, inlier_mask);
+    estimateRigidTransform_extended(good_key_points_next, good_key_points_key_frame, false, SamplingMethod::RANSAC, inlier_mask)
+      .copyTo(tf_next_estimated(cv::Range(0, 2), cv::Range::all()));
 
-          // New key frame if too few associations.
-          if (j == 0) {
-            const size_t num_inliers = static_cast<size_t>(std::accumulate(inlier_mask.cbegin(), inlier_mask.cend(), 0));
-            const float overlap = static_cast<float>(num_inliers) / key_points_next.size();
-            //const size_t num_inliers = matches_good.size();
-            // TODO: Other possible key frame policies:
-            // - IOU between rectangle key frame and transformed next frame < threshold.
-            // - IOU between set of key points transformed into each other frame and then lying inside the other rectangle.
-            if (i_key_frame != i &&
-                !descriptors_current.empty() &&
-                (matches_good.size() == 0 ||
-                 overlap < params.min_key_frame_overlap)) {
-              // New key frame due to small overlap.
-              std::cout << "New key frame. Overlap was " << overlap << "." << std::endl << std::endl;
-              // Update key frame.
-              i_key_frame = i;
-              tf_key_frame = tf_current;
-              key_points_key_frame = key_points_current;
-              descriptors_key_frame = descriptors_current;
-            }
-            else {
-              matched_with_good_overlap = true;
-            }
-          }
-        }
-        else {
-          // No matches available for estimation.
-          std::cerr << "Warning: No matches to estimate transformation." << std::endl << std::endl;
-        }
+    // New key frame if too few associations.
+    const size_t num_inliers = static_cast<size_t>(std::accumulate(inlier_mask.cbegin(), inlier_mask.cend(), 0));
+    const float overlap = static_cast<float>(num_inliers) / key_points_next.size();
+    //const size_t num_inliers = matches_good.size();
+    // TODO: Other possible key frame policies:
+    // - IOU between rectangle key frame and transformed next frame < threshold.
+    // - IOU between set of key points transformed into each other frame and then lying inside the other rectangle.
+    if (i_key_frame != i &&
+        !descriptors_current.empty() &&
+        (matches_good.empty() ||
+         overlap < params.min_key_frame_overlap)) {
+      // New key frame due to small overlap.
+      std::cout << "New key frame. Overlap was " << overlap << "." << std::endl << std::endl;
+      // Update key frame.
+      i_key_frame = i;
+      tf_key_frame = tf_current;
+      key_points_key_frame = key_points_current;
+      descriptors_key_frame = descriptors_current;
+
+      // Match and estimate again.
+      // TODO: Refactor this. Problem: Depends on many variables and visualization stuff. Maybe use OOP (Create class for match / estimation with attributes).
+      matches_good = matchKeyPoints(descriptors_key_frame, descriptors_next);
+      good_key_points_key_frame.clear();
+      good_key_points_next.clear();
+      inlier_mask.clear();
+      for (const auto& match : matches_good) {
+        good_key_points_key_frame.push_back(key_points_key_frame[match.queryIdx].pt);
+        good_key_points_next.push_back(key_points_next[match.trainIdx].pt);
       }
-      else {
-        // No key points available for estimation.
-        std::cerr << "Warning: No key points in key frame or next frame." << std::endl << std::endl;
-      }
+      //tf_next_estimated = cv::findHomography(good_key_points_next, good_key_points_key_frame, cv::RANSAC, 3.0, inlier_mask);
+      estimateRigidTransform_extended(good_key_points_next, good_key_points_key_frame, false, SamplingMethod::RANSAC, inlier_mask)
+        .copyTo(tf_next_estimated(cv::Range(0, 2), cv::Range::all()));
+    }
+
+    if (matches_good.empty()) {
+      // No matches available for estimation.
+      std::cerr << "Warning: No matches to estimate transformation." << std::endl << std::endl;
     }
 
     // Debug visualize correspondencies.
@@ -123,13 +126,12 @@ std::vector<cv::Mat> stabilize(Video& frames, const bool debug) {
       }
     }
 
-    if (tf_next.empty()) {
-      std::cerr << "Warning: Empty homography for frame " << i << "." << std::endl;
+    if (tf_next_estimated.empty()) {
+      std::cerr << "Warning: Empty estimated transform for frame " << i << "." << std::endl;
       std::cout << std::endl;
     }
     // Accumulate transforms.
-    tf_next = tf_key_frame * tf_next;
-
+    tf_next = tf_key_frame * tf_next_estimated;
   }
   std::cout << "\e[1A" << "100 %   " << std::endl;
   return tfs;
